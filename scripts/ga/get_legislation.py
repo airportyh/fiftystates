@@ -8,6 +8,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pyutils.legislation import (LegislationScraper, Bill, Vote, Legislator,
                                  NoDataForYear)
 
+def ancestor_table(elm):
+    if elm is None:
+        return page
+    ret = elm.getparent()
+    while ret and ret.tag != 'table' and ret.tag != 'html':
+        ret = ret.getparent()
+    return ret
+
+def table_index(parent, elm):
+    tables = parent.cssselect('table')
+    for i in xrange(len(tables)):
+        tab = tables[i]
+        if tab == elm:
+            return i
+    return None
 
 class GALegislationScraper(LegislationScraper):
     """
@@ -146,6 +161,8 @@ class GALegislationScraper(LegislationScraper):
                 break
             bill.add_sponsor('', a.text_content().strip())
 
+        self.parse_votes(url, page, chamberName, bill)
+
         # Actions
         for row in tables[1].cssselect('tr'):
             senate_date = row[0].text_content().strip()
@@ -178,6 +195,8 @@ class GALegislationScraper(LegislationScraper):
         for a in tables[2].cssselect('a'):
             bill.add_sponsor('', a.text_content().strip())
 
+        self.parse_votes_1999(url, page, chamberName, bill)
+
         # Actions
         for row in tables[-1].cssselect('tr'):
             senate_date = row[0].text_content().strip()
@@ -207,6 +226,8 @@ class GALegislationScraper(LegislationScraper):
         for a in tables[1].cssselect('a'):
             bill.add_sponsor('', a.text_content().strip())
 
+        self.parse_votes_2001_2004(url, page, chamberName, bill)
+
         # Actions
         center = page.cssselect('table center')[-1]
 
@@ -229,8 +250,127 @@ class GALegislationScraper(LegislationScraper):
 
         self.add_bill(bill)
 
+#    def parse_votes_2001(self, url, page, chamberName, bill):
+#        vote_links = filter(lambda a: a.get('href') and a.get('href').find('../votes/') == 0, page.cssselect('a'))
+#        for a in vote_links:
+#            vote_url = urlparse.urljoin(url, a.get('href'))
+#            print "vote_url: %s" % vote_url
+#            vote_page = parse(vote_url).getroot()
+#            date_table = vote_page.cssselect('table table')[5]
+#            motion = date_table.cssselect('td')[3].text_content()
+#            date = date_table.cssselect('td font font')[0].text + ' ' + \
+#                date_table.cssselect('td font font')[1].text
+#            counts_line = vote_page.cssselect('table table')[6].text_content().split()
+#            yeses = int(counts_line[2].strip('0') or 0)
+#            noes = int(counts_line[5].strip('0') or 0)
+#            other = int(counts_line[8].strip('0') or 0) + int(counts_line[11].strip('0') or 0)
+#            vote_obj = Vote(chamberName, date, motion, yeses > noes, yeses, noes, other)
+#            vote_vals = vote_page.cssselect('table table')[7].cssselect('tr th')
+#            vote_reps = vote_page.cssselect('table table')[7].cssselect('tr td')
+#            for i in xrange(len(vote_vals)):
+#                rep = vote_reps[i].text_content().strip()
+#                val = vote_vals[i].text_content().strip()
+#                if val == 'Y':
+#                    vote_obj.yes(rep)
+#                elif val == 'N':
+#                    vote_obj.no(rep)
+#                else:
+#                    vote_obj.other(rep)
+#            bill.add_vote(vote_obj)
+
+    def parse_vote(self, vote_url, chamberName):
+        page = parse(vote_url).getroot()
+        summary_table = filter(lambda tab: tab.text_content().find('Yeas') == 0, page.cssselect('table'))[0]
+        vote_table = ancestor_table(summary_table)
+        ind = table_index(vote_table, summary_table)
+        vote_tally_table = vote_table.cssselect('table')[ind+1]
+        date_table = vote_table.cssselect('table')[ind-1]
+        counts_line = summary_table.text_content().strip().split()
+        yeses = int(counts_line[2].strip('0') or 0)
+        noes = int(counts_line[5].strip('0') or 0)
+        other = int(counts_line[8].strip('0') or 0) + int(counts_line[11].strip('0') or 0)
+        
+        tally_counts = filter(lambda p: p!='', map(str.strip, vote_tally_table.text_content().strip().split('\n')))
+
+        if len(tally_counts[0]) > 1:
+            tally_counts = map(lambda t: (t[:1], t[1:]), tally_counts)
+        else:
+            tc = []
+            for i in xrange(0, len(tally_counts), 2):
+                tc.append((tally_counts[i], tally_counts[i+1]))
+            tally_counts = tc
+            
+        date_line = date_table.text_content().strip().split('\n')
+        date = ' '.join(date_line[0:2])
+        motion = date_line[-1]
+        vote = Vote(chamberName, date, motion, yeses > noes, yeses, noes, other)
+        print "tally_counts: %s" % tally_counts
+        for tc in tally_counts:
+            val = tc[0]
+            rep = tc[1]
+            if val == 'Y':
+                vote.yes(rep)
+            elif val == 'N':
+                vote.no(rep)
+            else:
+                vote.other(rep)
+        return vote
+
+#    def parse_vote_old(self, vote_url, chamberName):
+#        vote_page = parse(vote_url).getroot()
+#        summary_table = filter(lambda tab: tab.text_content().find('Yeas') == 0, page.cssselect('table'))[0]
+#        vote_table = self.ancestor_table(summary_table)
+#        vote_tally_table = self.next_table(vote_table, summary_table)
+#        summary = vote_page.cssselect('center table')[1].cssselect('tr')[0]
+#        date = (summary.cssselect('td')[0].text + ' ' + summary.cssselect('td')[1].text).strip()
+#        counts_line = vote_page.cssselect('center table')[2].cssselect('tr')[0].text_content().split()
+#        print counts_line
+#        yeses = int(counts_line[2].strip('0') or 0)
+#        noes = int(counts_line[5].strip('0') or 0)
+#        other = int(counts_line[8].strip('0') or 0) + int(counts_line[11].strip('0') or 0)
+#        vote_obj = Vote(chamberName, date, '', yeses > noes, yeses, noes, other)
+#        for vote in vote_page.cssselect('center table')[3].cssselect('tr tr'):
+#            if len(vote) < 3:
+#                continue
+#            val = vote[1].text
+#            rep = vote[2].text
+#            if val == 'Y':
+#                vote_obj.yes(rep)
+#            elif val == 'N':
+#                vote_obj.no(rep)
+#            else:
+#                vote_obj.other(rep)
+#        return vote_obj
+
+    def parse_votes_2001_2004(self, url, page, chamberName, bill):
+        vote_links = filter(lambda a: a.get('href') and a.get('href').find('../votes/') == 0, page.cssselect('a'))
+        for a in vote_links:
+            vote_url = urlparse.urljoin(url, a.get('href'))
+            bill.add_vote(self.parse_vote(vote_url, chamberName))
+        
+    def parse_votes(self, url, page, chamberName, bill):
+        # Votes
+        for a in page.cssselect("#votes a"):
+            vote_url = urlparse.urljoin(url, a.get('href'))
+            vote_page = parse(vote_url).getroot()
+            date = vote_page.cssselect('#date')[0].text
+            yeses = int(vote_page.cssselect('#yea')[0].text)
+            noes = int(vote_page.cssselect('#nay')[0].text)
+            other = sum(map(lambda s: int(s.text), vote_page.cssselect('#not-voting')))
+            vote_obj = Vote(chamberName, date, '', yeses > noes, yeses, noes, other)
+            for vote in vote_page.cssselect('ul.roll-call li'):
+                rep = vote.text_content().strip()
+                val = vote[0].text
+                if val == 'Y':
+                    vote_obj.yes(rep)
+                elif val == 'N':
+                    vote_obj.no(rep)
+                else:
+                    vote_obj.other(rep)
+            bill.add_vote(vote_obj)        
+
     def scrape2003(self, url, year, chamberName, session, number):
-        "e.g. http://www.legis.ga.gov/legis/2003_04/sum/sum/sb1.htm"
+        "e.g. http://www.legis.ga.gov/legis/2003_04/sum/sb1.htm"
         page = parse(url).getroot()
 
         # Grab the interesting tables on the page.
@@ -243,6 +383,8 @@ class GALegislationScraper(LegislationScraper):
         # Sponsorships
         for a in tables[1].cssselect('a'):
             bill.add_sponsor('', a.text_content().strip())
+
+        self.parse_votes_2001_2004(url, page, chamberName, bill)
 
         # Actions
         center = page.cssselect('center table center')[0]
@@ -265,7 +407,7 @@ class GALegislationScraper(LegislationScraper):
         self.add_bill(bill)
 
     def scrape2005(self, url, year, chamberName, session, number):
-        "e.g. http://www.legis.ga.gov/legis/2005_06/sum/sum/sb1.htm"
+        "e.g. http://www.legis.ga.gov/legis/2005_06/sum/sb1.htm"
         page = parse(url).getroot()
 
         # Bill
@@ -275,6 +417,8 @@ class GALegislationScraper(LegislationScraper):
         # Sponsorships
         for a in page.cssselect("#sponsors a"):
             bill.add_sponsor('', a.text_content().strip())
+
+        self.parse_votes(url, page, chamberName, bill)
 
         # Actions
         for row in page.cssselect('#history tr')[1:]:
@@ -295,7 +439,7 @@ class GALegislationScraper(LegislationScraper):
         self.add_bill(bill)
 
     def scrape2007(self, url, year, chamberName, session, number):
-        "e.g. http://www.legis.ga.gov/legis/2007_09/sum/sum/sb1.htm"
+        "e.g. http://www.legis.ga.gov/legis/2007_08/sum/sb1.htm"
         page = parse(url).getroot()
 
         # Bill
@@ -305,6 +449,8 @@ class GALegislationScraper(LegislationScraper):
         # Sponsorships
         for a in page.cssselect("#sponsors a"):
             bill.add_sponsor('', a.text_content().strip())
+
+        self.parse_votes(url, page, chamberName, bill)
 
         # Actions
         for row in page.cssselect('#history tr')[1:]:
@@ -324,17 +470,25 @@ class GALegislationScraper(LegislationScraper):
 
         self.add_bill(bill)
 
+    
+            
     def scrape2009(self, url, year, chamberName, session, number):
-        "e.g. http://www.legis.ga.gov/legis/2009_10/sum/sum/sb1.htm"
+        "e.g. http://www.legis.ga.gov/legis/2009_10/sum/sb1.htm"
         page = parse(url).getroot()
 
         # Bill
-        name = page.cssselect('#legislation h1')[0].text_content().strip()
+        try:
+            name = page.cssselect('#legislation h1')[0].text_content().strip()
+        except:
+            name = "Unknown"
         bill = Bill(session, chamberName, number, name)
 
         # Sponsorships
         for a in page.cssselect("#sponsors a"):
             bill.add_sponsor('', a.text_content().strip())
+
+        self.parse_votes(url, page, chamberName, bill)
+            
 
         # Actions
         for row in page.cssselect('#history tr')[1:]:

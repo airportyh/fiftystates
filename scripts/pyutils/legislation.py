@@ -261,6 +261,7 @@ class LegislationScraper(object):
         """
         Add a scraped :class:`pyutils.legislation.Bill` object.
         """
+        
         self.log("add_bill %s %s: %s" % (bill['chamber'],
                                          bill['session'],
                                          bill['bill_id']))
@@ -272,7 +273,6 @@ class LegislationScraper(object):
                                  {'name': l,
                                   'leg_id': self.matcher[vote['chamber']][l]},
                                  vote[type])
-
         for sponsor in bill['sponsors']:
             if 'chamber' in sponsor:
                 leg_id = self.matcher[sponsor['chamber']][sponsor['name']]
@@ -286,6 +286,8 @@ class LegislationScraper(object):
         filename = "%s:%s:%s.json" % (bill['session'], bill['chamber'],
                                       bill['bill_id'])
         filename = filename.encode('ascii', 'replace')
+        #print "outputdir: %s" % self.output_dir
+        #print "json: %s" % json.dumps(bill, cls=DateEncoder)
         with open(os.path.join(self.output_dir, "bills", filename), 'w') as f:
             json.dump(bill, f, cls=DateEncoder)
 
