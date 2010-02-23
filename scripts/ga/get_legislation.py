@@ -250,34 +250,6 @@ class GALegislationScraper(LegislationScraper):
 
         self.add_bill(bill)
 
-#    def parse_votes_2001(self, url, page, chamberName, bill):
-#        vote_links = filter(lambda a: a.get('href') and a.get('href').find('../votes/') == 0, page.cssselect('a'))
-#        for a in vote_links:
-#            vote_url = urlparse.urljoin(url, a.get('href'))
-#            print "vote_url: %s" % vote_url
-#            vote_page = parse(vote_url).getroot()
-#            date_table = vote_page.cssselect('table table')[5]
-#            motion = date_table.cssselect('td')[3].text_content()
-#            date = date_table.cssselect('td font font')[0].text + ' ' + \
-#                date_table.cssselect('td font font')[1].text
-#            counts_line = vote_page.cssselect('table table')[6].text_content().split()
-#            yeses = int(counts_line[2].strip('0') or 0)
-#            noes = int(counts_line[5].strip('0') or 0)
-#            other = int(counts_line[8].strip('0') or 0) + int(counts_line[11].strip('0') or 0)
-#            vote_obj = Vote(chamberName, date, motion, yeses > noes, yeses, noes, other)
-#            vote_vals = vote_page.cssselect('table table')[7].cssselect('tr th')
-#            vote_reps = vote_page.cssselect('table table')[7].cssselect('tr td')
-#            for i in xrange(len(vote_vals)):
-#                rep = vote_reps[i].text_content().strip()
-#                val = vote_vals[i].text_content().strip()
-#                if val == 'Y':
-#                    vote_obj.yes(rep)
-#                elif val == 'N':
-#                    vote_obj.no(rep)
-#                else:
-#                    vote_obj.other(rep)
-#            bill.add_vote(vote_obj)
-
     def parse_vote(self, vote_url, chamberName):
         page = parse(vote_url).getroot()
         summary_table = filter(lambda tab: tab.text_content().find('Yeas') == 0, page.cssselect('table'))[0]
@@ -315,32 +287,6 @@ class GALegislationScraper(LegislationScraper):
             else:
                 vote.other(rep)
         return vote
-
-#    def parse_vote_old(self, vote_url, chamberName):
-#        vote_page = parse(vote_url).getroot()
-#        summary_table = filter(lambda tab: tab.text_content().find('Yeas') == 0, page.cssselect('table'))[0]
-#        vote_table = self.ancestor_table(summary_table)
-#        vote_tally_table = self.next_table(vote_table, summary_table)
-#        summary = vote_page.cssselect('center table')[1].cssselect('tr')[0]
-#        date = (summary.cssselect('td')[0].text + ' ' + summary.cssselect('td')[1].text).strip()
-#        counts_line = vote_page.cssselect('center table')[2].cssselect('tr')[0].text_content().split()
-#        print counts_line
-#        yeses = int(counts_line[2].strip('0') or 0)
-#        noes = int(counts_line[5].strip('0') or 0)
-#        other = int(counts_line[8].strip('0') or 0) + int(counts_line[11].strip('0') or 0)
-#        vote_obj = Vote(chamberName, date, '', yeses > noes, yeses, noes, other)
-#        for vote in vote_page.cssselect('center table')[3].cssselect('tr tr'):
-#            if len(vote) < 3:
-#                continue
-#            val = vote[1].text
-#            rep = vote[2].text
-#            if val == 'Y':
-#                vote_obj.yes(rep)
-#            elif val == 'N':
-#                vote_obj.no(rep)
-#            else:
-#                vote_obj.other(rep)
-#        return vote_obj
 
     def parse_votes_2001_2004(self, url, page, chamberName, bill):
         vote_links = filter(lambda a: a.get('href') and a.get('href').find('../votes/') == 0, page.cssselect('a'))
